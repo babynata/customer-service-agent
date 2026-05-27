@@ -6,6 +6,8 @@ LangGraph 的状态机核心。所有节点通过读写 State 传递信息。
 
 from typing import TypedDict, Annotated, Optional, Literal
 
+from langgraph.graph.message import add_messages
+
 
 def _merge_lists(x: list, y: list) -> list:
     """Reducer：合并两个列表"""
@@ -17,6 +19,13 @@ class AgentState(TypedDict):
 
     # === 输入 ===
     user_query: str
+
+    # === 多轮对话记忆 ===
+    messages: Annotated[list[dict], add_messages]
+    """对话历史，使用 LangGraph 原生 Reducer 自动处理追加/去重/合并"""
+
+    turn_count: int
+    """当前对话轮次，用于演示展示"""
 
     # === 认知层（LLM 输出）===
     intent: Optional[Literal["shipping", "refund", "order_status", "other"]]

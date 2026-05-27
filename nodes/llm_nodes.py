@@ -56,15 +56,27 @@ def intent_understand(state: AgentState) -> AgentState:
     专用 LLM 节点 #1：语义理解
     输出契约：IntentSchema
     """
+    history = state.get("messages", [])
+    history_text = ""
+    if history:
+        # 取最近 3 轮对话作为上下文
+        recent = history[-6:] if len(history) > 6 else history
+        for msg in recent:
+            role = "用户" if msg.get("role") == "user" else "客服"
+            history_text += f"{role}：{msg.get('content', '')}\n"
+
     prompt = f"""
     你是【意图识别专家】。只分析用户意图，不做任何操作决定。
 
-    用户问题：{state['user_query']}
+    历史对话（最近{len(history)//2 if history else 0}轮）：
+    {history_text or "（无历史对话）"}
+
+    当前用户问题：{state['user_query']}
 
     要求：
     1. intent 必须从白名单选择：["shipping", "refund", "order_status", "other"]
     2. confidence 必须诚实，不确定时低于 0.8
-    3. entities 必须精确提取 18 位订单号和 11 位手机号
+    3. entities 必须精确提取 18 位订单号和 11 位手机号（可引用历史对话中的信息）
     4. sentiment：-1.0(极度愤怒) ~ 1.0(非常满意)
     """
 
@@ -120,8 +132,19 @@ def reason_node(state: AgentState) -> AgentState:
     order = state.get("order_info")
     policy = state.get("policy_result")
 
+    history = state.get("messages", [])
+    history_text = ""
+    if history:
+        recent = history[-6:] if len(history) > 6 else history
+        for msg in recent:
+            role = "用户" if msg.get("role") == "user" else "客服"
+            history_text += f"{role}：{msg.get('content', '')}\n"
+
     context = f"""
     你是【决策推理专家】。基于已知信息判断如何处理用户请求。
+
+    历史对话（最近{len(history)//2 if history else 0}轮）：
+    {history_text or "（无历史对话）"}
 
     已知信息：
     - 用户意图：{state['intent']}
@@ -180,8 +203,10 @@ def generate_node(state: AgentState) -> AgentState:
     输出契约：GenerateSchema
     """
     if state.get("blocked"):
+        resp = f"您好，您的问题需要人工客服处理。原因：{state.get('block_reason', '')}"
         return {
-            "response": f"您好，您的问题需要人工客服处理。原因：{state.get('block_reason', '')}",
+            "response": resp,
+            "messages": [{"role": "assistant", "content": resp}],
             "policy_cited": False,
             "thinking_log": [
                 "📝 【LLM-回复生成】",
@@ -194,8 +219,19 @@ def generate_node(state: AgentState) -> AgentState:
     policy = state.get("policy_result")
     reasoning = state.get("reasoning", "")
 
+    history = state.get("messages", [])
+    history_text = ""
+    if history:
+        recent = history[-6:] if len(history) > 6 else history
+        for msg in recent:
+            role = "用户" if msg.get("role") == "user" else "客服"
+            history_text += f"{role}：{msg.get('content', '')}\n"
+
     prompt = f"""
     你是【客服回复专家】。基于已确认的决策结论，生成给用户的回复。
+
+    历史对话（最近{len(history)//2 if history else 0}轮）：
+    {history_text or "（无历史对话）"}
 
     决策结论（不可违背）：{reasoning}
     订单信息：{json.dumps(order, ensure_ascii=False) if order else '无'}
@@ -204,7 +240,8 @@ def generate_node(state: AgentState) -> AgentState:
     规则：
     1. 退款场景必须引用政策依据（policy_cited=true）
     2. 只使用提供的数据，不编造
-    3. 语气礼貌、简洁
+    3. 语气礼貌、简洁，与历史对话风格一致
+    4. 如果是追问（用户没有提供新信息），基于历史对话中的已知信息回答
 
     输出契约：GenerateSchema
     """
@@ -219,6 +256,7 @@ def generate_node(state: AgentState) -> AgentState:
         return {
             "response": result.response,
             "policy_cited": result.policy_cited,
+            "messages": [{"role": "assistant", "content": result.response}],
             "contract_violations": violations,
             "thinking_log": [
                 "📝 【LLM-回复生成】",
@@ -232,6 +270,7 @@ def generate_node(state: AgentState) -> AgentState:
         return {
             "response": "系统繁忙，请稍后重试。",
             "policy_cited": False,
+            "messages": [{"role": "assistant", "content": "系统繁忙，请稍后重试。"}],
             "contract_violations": [f"GenerateSchema 解析失败: {str(e)[:50]}"],
             "thinking_log": [
                 "📝 【LLM-回复生成】",
