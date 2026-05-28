@@ -2,12 +2,15 @@
 状态机构建器
 
 将节点和边组装成完整的 LangGraph 状态机。
+生产环境使用 Redis 持久化替换 MemorySaver。
 """
 
+import os
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from state import AgentState
+from state.redis_saver import RedisSaver
 from nodes import (
     intent_understand, reason_node, generate_node,
     retrieve_node, policy_check, contract_check,
@@ -17,6 +20,10 @@ from graph.router import (
     route_after_intent, route_after_retrieve, route_after_policy,
     route_after_reason, route_after_contract, route_after_escalate,
 )
+
+
+# Checkpoint 持久化后端选择
+CHECKPOINTER_TYPE = os.environ.get("CHECKPOINTER_TYPE", "memory")  # "memory" | "redis"
 
 
 def build_agent_graph():
@@ -51,7 +58,11 @@ def build_agent_graph():
     workflow.add_edge("generate", "final_check")
     workflow.add_edge("final_check", END)
 
-    memory = MemorySaver()
+    # 持久化后端选择
+    if CHECKPOINTER_TYPE == "redis":
+        memory = RedisSaver()
+    else:
+        memory = MemorySaver()
     return workflow.compile(checkpointer=memory)
 
 
