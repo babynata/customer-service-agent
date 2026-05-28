@@ -12,6 +12,13 @@ from schemas import IntentSchema, ReasonSchema, GenerateSchema
 from state import AgentState
 
 
+def _msg_to_dict(msg) -> dict:
+    """兼容 LangChain Message 对象和普通 dict"""
+    if hasattr(msg, "type") and hasattr(msg, "content"):
+        return {"role": "user" if msg.type == "human" else "assistant", "content": msg.content}
+    return msg if isinstance(msg, dict) else {"role": "user", "content": str(msg)}
+
+
 def _safe_json_parse(content: str, default: dict) -> dict:
     """鲁棒的 JSON 解析器，处理 markdown 代码块等格式"""
     if not content or not content.strip():
@@ -62,8 +69,9 @@ def intent_understand(state: AgentState) -> AgentState:
         # 取最近 3 轮对话作为上下文
         recent = history[-6:] if len(history) > 6 else history
         for msg in recent:
-            role = "用户" if msg.get("role") == "user" else "客服"
-            history_text += f"{role}：{msg.get('content', '')}\n"
+            m = _msg_to_dict(msg)
+            role = "用户" if m.get("role") == "user" else "客服"
+            history_text += f"{role}：{m.get('content', '')}\n"
 
     prompt = f"""
     你是【意图识别专家】。只分析用户意图，不做任何操作决定。
@@ -137,8 +145,9 @@ def reason_node(state: AgentState) -> AgentState:
     if history:
         recent = history[-6:] if len(history) > 6 else history
         for msg in recent:
-            role = "用户" if msg.get("role") == "user" else "客服"
-            history_text += f"{role}：{msg.get('content', '')}\n"
+            m = _msg_to_dict(msg)
+            role = "用户" if m.get("role") == "user" else "客服"
+            history_text += f"{role}：{m.get('content', '')}\n"
 
     context = f"""
     你是【决策推理专家】。基于已知信息判断如何处理用户请求。
@@ -224,8 +233,9 @@ def generate_node(state: AgentState) -> AgentState:
     if history:
         recent = history[-6:] if len(history) > 6 else history
         for msg in recent:
-            role = "用户" if msg.get("role") == "user" else "客服"
-            history_text += f"{role}：{msg.get('content', '')}\n"
+            m = _msg_to_dict(msg)
+            role = "用户" if m.get("role") == "user" else "客服"
+            history_text += f"{role}：{m.get('content', '')}\n"
 
     prompt = f"""
     你是【客服回复专家】。基于已确认的决策结论，生成给用户的回复。
