@@ -37,6 +37,9 @@ class AgentState(TypedDict):
     order_info: Optional[dict]
     faq_result: Optional[dict]
 
+    # === 政策层（代码执行）===
+    policy_result: Optional[dict]
+
     # === 决策层（LLM 输出）===
     reasoning: Optional[str]
     can_auto_resolve: Optional[bool]

@@ -31,8 +31,12 @@ def retrieve_node(state: AgentState) -> AgentState:
 
     try:
         results = asyncio.run(query_all())
+    except RuntimeError:
+        # 已有事件循环（pytest、Jupyter）
+        loop = asyncio.get_event_loop()
+        results = loop.run_until_complete(query_all())
     except Exception as e:
-        results = {"order": {"error": str(e)}, "faq": {"error": str(e)}}
+        results = {"order": {"error": str(e), "data": None}, "faq": {"error": str(e), "matched": False}}
 
     order_result = results.get("order", {})
     faq_result = results.get("faq", {})
