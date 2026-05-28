@@ -86,6 +86,45 @@ def route_after_intent(state) -> Literal["retrieve", "escalate_gate"]:
 | `我要退 iPhone，订单 123456789012345678` | 金额超限(¥8999>¥5000)，代码拦截 |
 | `你们这群骗子！` | 情感负面，代码拦截 |
 
+## 工程化特性（方向三）
+
+### 1. 单元测试 + 集成测试
+
+```bash
+ARK_API_KEY="sk-test-fake-key-for-pytest" pytest tests/ -v
+```
+
+覆盖范围：
+- `tests/test_code_nodes.py` — 18 个测试，覆盖检索/政策/契约/升级/最终校验
+- `tests/test_llm_nodes.py` — 14 个测试，mock LLM 调用验证 Schema 处理逻辑
+- `tests/test_graph.py` — 5 个集成测试，验证完整图路径（happy path / blocked path / 多轮记忆）
+
+### 2. Mock 数据工厂
+
+`tools/mock_factory.py` 支持按规则批量生成：
+- 订单：18 位订单号、12 种商品、5 种物流、6 种状态
+- 物流：根据状态自动生成轨迹
+- FAQ：12 个常见场景
+
+`tools/mock_data.py` 保留 2 个原始硬编码订单 + 20 个工厂生成订单，确保测试兼容。
+
+### 3. 模型路由分层
+
+`config.py` 定义两套参数实例：
+- `llm_fast`：temperature=0.0, max_tokens=512 —— 用于意图识别（简单分类）
+- `llm_main`：temperature=0.1, max_tokens=2048 —— 用于推理与生成（复杂决策）
+
+当前仅 deepseek-v3 可用，通过参数分层实现路由效果。`thinking_log` 中标注每个节点使用的 tier 和参数。预留 `get_model_for_task()` 接口，后续可无缝切换多模型。
+
+### 4. A/B 实验框架 + UI 策略切换
+
+- `AgentState` 新增 `variant` 字段
+- `generate_node` 根据 A/B 选择不同 prompt 模板：
+  - **A**：标准客服，礼貌简洁
+  - **B**：亲切有温度，主动解释原因
+- Gradio UI 右侧「回复策略」Dropdown 支持观众主动切换
+- `thinking_log` 中标注当前策略版本
+
 ## Mock 数据说明
 
 当前使用内存 Mock 数据演示链路。生产环境替换点：

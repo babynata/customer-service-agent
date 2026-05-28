@@ -138,9 +138,10 @@ def create_ui():
                                 value=None,
                                 interactive=True,
                             )
+                        thinking_meta = gr.Markdown("当前轮次暂无模型路由信息")
                         thinking = gr.Textbox(
                             label="Agent 决策过程（契约驱动）",
-                            lines=28,
+                            lines=26,
                             max_lines=45,
                             interactive=False,
                             value="发送消息后，此处展示每个节点的契约校验过程..."
@@ -157,6 +158,8 @@ def create_ui():
                         dialog_summary_box = gr.Textbox(
                             label="对话摘要", interactive=False, lines=8, value=""
                         )
+                        export_btn = gr.Button("📥 导出会话 JSON", variant="secondary")
+                        export_file = gr.File(label="导出文件", visible=False)
                         manual_reply = gr.Textbox(
                             label="人工回复", placeholder="输入人工客服回复..."
                         )
@@ -169,11 +172,25 @@ def create_ui():
         def _render_thinking(thinking_dict: dict, selected_round: int) -> str:
             return thinking_dict.get(selected_round, "")
 
+        def _extract_meta(thinking_text: str) -> str:
+            """从 thinking_log 中提取模型路由和策略版本信息"""
+            lines = thinking_text.split("\n")
+            meta_parts = []
+            for line in lines:
+                if "模型:" in line or "策略版本:" in line:
+                    # 去掉前面的空格，加粗显示
+                    clean = line.strip()
+                    if "模型:" in clean:
+                        meta_parts.append(f"- **{clean}**")
+                    else:
+                        meta_parts.append(f"- {clean}")
+            return "\n".join(meta_parts) if meta_parts else "当前轮次暂无模型路由信息"
+
         def respond(message, history, sid, thinking_dict, variant):
             if not message.strip():
                 return (
                     "", history, gr.Dropdown(), "", False, "", "", "",
-                    gr.Tabs(selected=0), "", thinking_dict,
+                    gr.Tabs(selected=0), "", thinking_dict, "",
                 )
             resp, think, blocked, dialog_summary, key_info, turn_count = chat(
                 message, history, sid, variant
@@ -189,10 +206,12 @@ def create_ui():
             tab_index = 1 if blocked else 0
             alert_md = "### ⚠️ 已触发人工接管" if blocked else ""
             turn_info_str = f"会话 ID: {sid} | 已对话 {turn_count} 轮"
+            meta_md = _extract_meta(think)
             return (
                 "",
                 history,
                 gr.Dropdown(choices=round_choices, value=latest_round),
+                meta_md,
                 think,
                 blocked,
                 dialog_summary,
@@ -209,11 +228,15 @@ def create_ui():
             history.append({"role": "assistant", "content": f"👤 {reply_text}"})
             return history, ""
 
+        def _render_thinking_full(thinking_dict: dict, selected_round: int):
+            text = thinking_dict.get(selected_round, "")
+            return text, _extract_meta(text)
+
         send.click(
             respond,
             [msg, chatbot, session, thinking_by_round_state, strategy_select],
             [
-                msg, chatbot, round_select, thinking, blocked_state,
+                msg, chatbot, round_select, thinking_meta, thinking, blocked_state,
                 dialog_summary_box, key_info_box, turn_info, right_tabs, manual_alert,
                 thinking_by_round_state,
             ],
@@ -222,7 +245,7 @@ def create_ui():
             respond,
             [msg, chatbot, session, thinking_by_round_state, strategy_select],
             [
-                msg, chatbot, round_select, thinking, blocked_state,
+                msg, chatbot, round_select, thinking_meta, thinking, blocked_state,
                 dialog_summary_box, key_info_box, turn_info, right_tabs, manual_alert,
                 thinking_by_round_state,
             ],
@@ -230,7 +253,8 @@ def create_ui():
         clear.click(
             lambda: (
                 [],
-                gr.Dropdown(choices=[1], value=1),
+                gr.Dropdown(choices=[], value=None),
+                "当前轮次暂无模型路由信息",
                 "发送消息后，此处展示每个节点的契约校验过程...",
                 False,
                 "",
@@ -242,20 +266,38 @@ def create_ui():
             ),
             None,
             [
-                chatbot, round_select, thinking, blocked_state,
+                chatbot, round_select, thinking_meta, thinking, blocked_state,
                 dialog_summary_box, key_info_box, turn_info, right_tabs, manual_alert,
                 thinking_by_round_state,
             ],
         )
         round_select.change(
-            _render_thinking,
+            _render_thinking_full,
             [thinking_by_round_state, round_select],
-            thinking,
+            [thinking, thinking_meta],
         )
         manual_send.click(
             send_manual_reply,
             [manual_reply, chatbot],
             [chatbot, manual_reply]
+        )
+
+        def export_session(sid, thinking_dict, history):
+            import json, tempfile, os
+            data = {
+                "session_id": sid,
+                "messages": history,
+                "thinking_by_round": {str(k): v for k, v in thinking_dict.items()},
+            }
+            fd, path = tempfile.mkstemp(suffix=".json", prefix=f"session_{sid}_")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return gr.File(value=path, visible=True)
+
+        export_btn.click(
+            export_session,
+            [session, thinking_by_round_state, chatbot],
+            export_file,
         )
 
     return demo
