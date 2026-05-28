@@ -16,7 +16,7 @@ def _msg_to_dict(msg) -> dict:
         return {"role": "user" if msg.type == "human" else "assistant", "content": msg.content}
     return msg if isinstance(msg, dict) else {"role": "user", "content": str(msg)}
 
-def chat(message: str, history: list, session_id: str = "demo"):
+def chat(message: str, history: list, session_id: str = "demo", variant: str = "A"):
     """单次对话处理，保留多轮记忆"""
     config = {"configurable": {"thread_id": session_id}}
 
@@ -27,6 +27,7 @@ def chat(message: str, history: list, session_id: str = "demo"):
         "messages": [{"role": "user", "content": message}],
         "blocked": False,
         "policy_cited": False,
+        "variant": variant,
     }, config)
 
     # 组装当前轮的决策日志
@@ -115,6 +116,19 @@ def create_ui():
                     clear = gr.Button("清空")
 
             with gr.Column(scale=1):
+                strategy_select = gr.Dropdown(
+                    label="回复策略",
+                    choices=["A", "B"],
+                    value="A",
+                    interactive=True,
+                )
+                gr.Markdown("""
+                **策略说明：**
+                - **A**：标准客服，礼貌简洁
+                - **B**：亲切有温度，主动解释原因
+                """)
+
+            with gr.Column(scale=1):
                 with gr.Tabs(elem_id="right_tabs") as right_tabs:
                     with gr.TabItem("🧠 Agent 决策过程"):
                         with gr.Row():
@@ -155,14 +169,14 @@ def create_ui():
         def _render_thinking(thinking_dict: dict, selected_round: int) -> str:
             return thinking_dict.get(selected_round, "")
 
-        def respond(message, history, sid, thinking_dict):
+        def respond(message, history, sid, thinking_dict, variant):
             if not message.strip():
                 return (
                     "", history, gr.Dropdown(), "", False, "", "", "",
                     gr.Tabs(selected=0), "", thinking_dict,
                 )
             resp, think, blocked, dialog_summary, key_info, turn_count = chat(
-                message, history, sid
+                message, history, sid, variant
             )
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": f"🤖 {resp}"})
@@ -197,7 +211,7 @@ def create_ui():
 
         send.click(
             respond,
-            [msg, chatbot, session, thinking_by_round_state],
+            [msg, chatbot, session, thinking_by_round_state, strategy_select],
             [
                 msg, chatbot, round_select, thinking, blocked_state,
                 dialog_summary_box, key_info_box, turn_info, right_tabs, manual_alert,
@@ -206,7 +220,7 @@ def create_ui():
         )
         msg.submit(
             respond,
-            [msg, chatbot, session, thinking_by_round_state],
+            [msg, chatbot, session, thinking_by_round_state, strategy_select],
             [
                 msg, chatbot, round_select, thinking, blocked_state,
                 dialog_summary_box, key_info_box, turn_info, right_tabs, manual_alert,

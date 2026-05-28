@@ -127,7 +127,7 @@ def escalate_gate(state: AgentState) -> AgentState:
         blocked = True
         reason = "用户情绪极度负面"
         logs.append("   触发: 情感负面")
-    elif state.get("policy_result", {}).get("reason") == "金额超限":
+    elif (state.get("policy_result") or {}).get("reason") == "金额超限":
         blocked = True
         reason = f"金额超限 ¥{state['order_info']['amount']}"
         logs.append("   触发: 金额超限")

@@ -231,6 +231,7 @@ def generate_node(state: AgentState) -> AgentState:
     order = state.get("order_info")
     policy = state.get("policy_result")
     reasoning = state.get("reasoning", "")
+    variant = state.get("variant") or "A"
 
     history = state.get("messages", [])
     history_text = ""
@@ -240,6 +241,27 @@ def generate_node(state: AgentState) -> AgentState:
             m = _msg_to_dict(msg)
             role = "用户" if m.get("role") == "user" else "客服"
             history_text += f"{role}：{m.get('content', '')}\n"
+
+    # A/B 策略切换：不同语气与规则
+    if variant == "B":
+        tone_rules = """
+        语气风格：亲切、有温度，像朋友一样耐心解释，主动提供下一步建议。
+        规则：
+        1. 退款场景必须引用政策依据（policy_cited=true）
+        2. 只使用提供的数据，不编造
+        3. 开头可称呼"亲"，结尾主动询问"还有其他可以帮您的吗"
+        4. 如果是追问（用户没有提供新信息），基于历史对话中的已知信息回答
+        5. 适当解释原因，让用户理解"为什么"
+        """
+    else:
+        tone_rules = """
+        语气风格：标准客服，礼貌、简洁、专业。
+        规则：
+        1. 退款场景必须引用政策依据（policy_cited=true）
+        2. 只使用提供的数据，不编造
+        3. 语气礼貌、简洁，与历史对话风格一致
+        4. 如果是追问（用户没有提供新信息），基于历史对话中的已知信息回答
+        """
 
     prompt = f"""
     你是【客服回复专家】。基于已确认的决策结论，生成给用户的回复。
@@ -251,11 +273,8 @@ def generate_node(state: AgentState) -> AgentState:
     订单信息：{json.dumps(order, ensure_ascii=False) if order else '无'}
     政策结果：{json.dumps(policy, ensure_ascii=False) if policy else '无'}
 
-    规则：
-    1. 退款场景必须引用政策依据（policy_cited=true）
-    2. 只使用提供的数据，不编造
-    3. 语气礼貌、简洁，与历史对话风格一致
-    4. 如果是追问（用户没有提供新信息），基于历史对话中的已知信息回答
+    当前策略版本：{variant}
+    {tone_rules}
 
     输出契约：GenerateSchema
     """
@@ -275,6 +294,7 @@ def generate_node(state: AgentState) -> AgentState:
             "contract_violations": violations,
             "thinking_log": [
                 "📝 【LLM-回复生成】",
+                f"   策略版本: {variant}",
                 f"   模型: {info['model']} (tier={info['tier']}, temp={info['temp']}, max_tokens={info['max_tokens']})",
                 f"   输出契约: GenerateSchema",
                 f"   policy_cited={result.policy_cited}",
@@ -290,6 +310,7 @@ def generate_node(state: AgentState) -> AgentState:
             "contract_violations": [f"GenerateSchema 解析失败: {str(e)[:50]}"],
             "thinking_log": [
                 "📝 【LLM-回复生成】",
+                f"   策略版本: {variant}",
                 f"   ❌ 契约违约: GenerateSchema 解析失败 - {str(e)[:50]}"
             ]
         }

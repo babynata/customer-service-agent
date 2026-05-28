@@ -40,6 +40,10 @@ class AgentState(TypedDict):
     # === 政策层（代码执行）===
     policy_result: Optional[dict]
 
+    # === 实验层（A/B 测试）===
+    experiment_id: Optional[str]
+    variant: Optional[str]
+
     # === 决策层（LLM 输出）===
     reasoning: Optional[str]
     can_auto_resolve: Optional[bool]
