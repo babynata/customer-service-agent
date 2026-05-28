@@ -7,7 +7,7 @@ LLM 语义层节点
 
 import json
 
-from config import llm_intent, llm_reason, llm_generate
+from config import llm_intent, llm_reason, llm_generate, MODEL_INFO
 from schemas import IntentSchema, ReasonSchema, GenerateSchema
 from state import AgentState
 
@@ -102,6 +102,7 @@ def intent_understand(state: AgentState) -> AgentState:
         if order_id and (not isinstance(order_id, str) or len(order_id) != 18):
             violations.append(f"order_id 格式错误: {order_id}")
 
+        info = MODEL_INFO["intent"]
         return {
             "intent": result.intent,
             "confidence": result.confidence,
@@ -110,6 +111,7 @@ def intent_understand(state: AgentState) -> AgentState:
             "contract_violations": violations,
             "thinking_log": [
                 "🧠 【LLM-意图理解】",
+                f"   模型: {info['model']} (tier={info['tier']}, temp={info['temp']}, max_tokens={info['max_tokens']})",
                 f"   输出契约: IntentSchema",
                 f"   intent={result.intent} | confidence={result.confidence:.2f} | sentiment={result.sentiment:.2f}",
                 f"   entities={json.dumps(result.entities, ensure_ascii=False)}",
@@ -180,6 +182,7 @@ def reason_node(state: AgentState) -> AgentState:
         if not result.can_auto_resolve and not result.escalate_reason:
             violations.append("can_auto_resolve=false 但 escalate_reason 为空")
 
+        info = MODEL_INFO["reason"]
         return {
             "reasoning": result.analysis,
             "can_auto_resolve": result.can_auto_resolve,
@@ -187,6 +190,7 @@ def reason_node(state: AgentState) -> AgentState:
             "contract_violations": violations,
             "thinking_log": [
                 "🧠 【LLM-推理决策】",
+                f"   模型: {info['model']} (tier={info['tier']}, temp={info['temp']}, max_tokens={info['max_tokens']})",
                 f"   输出契约: ReasonSchema",
                 f"   can_auto_resolve={result.can_auto_resolve}",
                 f"   analysis={result.analysis[:50]}...",
@@ -263,6 +267,7 @@ def generate_node(state: AgentState) -> AgentState:
         if state["intent"] == "refund" and not result.policy_cited:
             violations.append("退款回复缺少政策引用标记")
 
+        info = MODEL_INFO["generate"]
         return {
             "response": result.response,
             "policy_cited": result.policy_cited,
@@ -270,6 +275,7 @@ def generate_node(state: AgentState) -> AgentState:
             "contract_violations": violations,
             "thinking_log": [
                 "📝 【LLM-回复生成】",
+                f"   模型: {info['model']} (tier={info['tier']}, temp={info['temp']}, max_tokens={info['max_tokens']})",
                 f"   输出契约: GenerateSchema",
                 f"   policy_cited={result.policy_cited}",
                 f"   confidence={result.confidence}",
