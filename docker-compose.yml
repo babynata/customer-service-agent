@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ARK_API_KEY=${ARK_API_KEY}
+      - ARK_ENDPOINT_ID=${ARK_ENDPOINT_ID:-deepseek-v3-2-251201}
+      - REDIS_URL=redis://redis:6379/0
+      - CHECKPOINTER_TYPE=redis
+    depends_on:
+      - redis
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/dashboard.json:/etc/grafana/provisioning/dashboards/agent-dashboard.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  agent-net:
+    driver: bridge
