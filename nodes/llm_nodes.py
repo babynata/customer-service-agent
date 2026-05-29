@@ -86,6 +86,9 @@ def intent_understand(state: AgentState) -> AgentState:
     2. confidence 必须诚实，不确定时低于 0.8
     3. entities 必须精确提取 18 位订单号和 11 位手机号（可引用历史对话中的信息）
     4. sentiment：-1.0(极度愤怒) ~ 1.0(非常满意)
+       【重要】sentiment 只基于**当前用户问题**判断，不受历史对话情绪影响。
+       "到哪了""什么时候到""怎么查""能退不"属于中性疑问句，sentiment 应 ≥ 0。
+       只有明确包含辱骂、威胁、强烈不满词汇时才判定为负面。
     """
 
     try:

@@ -250,8 +250,10 @@ def create_ui():
                 thinking_by_round_state,
             ],
         )
-        clear.click(
-            lambda: (
+        import uuid
+
+        def _clear_all():
+            return (
                 [],
                 gr.Dropdown(choices=[], value=None),
                 "当前轮次暂无模型路由信息",
@@ -263,12 +265,16 @@ def create_ui():
                 gr.Tabs(selected=0),
                 "",
                 {},
-            ),
+                f"demo_{uuid.uuid4().hex[:8]}",
+            )
+
+        clear.click(
+            _clear_all,
             None,
             [
                 chatbot, round_select, thinking_meta, thinking, blocked_state,
                 dialog_summary_box, key_info_box, turn_info, right_tabs, manual_alert,
-                thinking_by_round_state,
+                thinking_by_round_state, session,
             ],
         )
         round_select.change(
