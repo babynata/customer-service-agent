@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from api.schemas import ChatRequest, ChatResponse
 from graph import agent_app
+from observability.metrics import record_request, record_error
 
 
 router = APIRouter(tags=["chat"])
@@ -40,9 +41,16 @@ async def chat(req: ChatRequest):
             "variant": req.variant,
         }, config)
     except Exception as e:
+        record_error("chat", type(e).__name__)
         raise HTTPException(status_code=500, detail=f"Agent 执行错误: {str(e)}")
 
     thinking = result.get("thinking_log", [])
+
+    # 采集指标
+    record_request(
+        intent=result.get("intent", "unknown"),
+        blocked=result.get("blocked", False),
+    )
 
     return ChatResponse(
         response=result.get("response", ""),

@@ -1,0 +1,75 @@
+{
+  "dashboard": {
+    "title": "客服 Agent 监控面板",
+    "tags": ["agent", "llm"],
+    "timezone": "Asia/Shanghai",
+    "panels": [
+      {
+        "title": "QPS",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(agent_requests_total[1m])",
+            "legendFormat": "{{intent}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "title": "平均延迟",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(agent_latency_seconds_bucket[5m]))",
+            "legendFormat": "P95 {{node}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "title": "拦截率",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(agent_requests_total{blocked=\"true\"}[5m]) / rate(agent_requests_total[5m])",
+            "legendFormat": "blocked rate"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "title": "错误率",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(agent_errors_total[5m])",
+            "legendFormat": "{{node}} - {{error_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "title": "LLM 调用分布",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "agent_llm_calls_total",
+            "legendFormat": "{{tier}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "title": "FAQ 命中率",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "agent_faq_hit_rate",
+            "legendFormat": "hit rate"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      }
+    ]
+  }
+}

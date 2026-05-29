@@ -9,19 +9,21 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from api.middleware import RequestIDMiddleware
 from api.routes import health, chat
 from ui.gradio_app import create_ui
+from observability.metrics import get_metrics, CONTENT_TYPE_LATEST
+from observability.logging import setup_logging
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时预热
+    setup_logging()
     print("🚀 FastAPI 服务启动中...")
     yield
-    # 关闭时清理
     print("👋 FastAPI 服务已关闭")
 
 
@@ -45,6 +47,13 @@ app.add_middleware(
 # 路由
 app.include_router(health.router)
 app.include_router(chat.router)
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus 指标端点"""
+    return Response(content=get_metrics(), media_type=CONTENT_TYPE_LATEST)
+
 
 # 挂载 Gradio UI
 demo = create_ui()
