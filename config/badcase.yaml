@@ -1,0 +1,13 @@
+# Badcase 收集配置
+
+# 总开关：true=启用，false=禁用
+enabled: true
+
+# 采样率：1.0=全量收集，0.1=10%采样
+sample_rate: 1.0
+
+# 存储方式：jsonl（本地文件）
+storage: jsonl
+
+# 数据保留天数
+retention_days: 7

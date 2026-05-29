@@ -56,7 +56,18 @@ def build_agent_graph():
     workflow.add_conditional_edges("contract_check", route_after_contract)
     workflow.add_conditional_edges("escalate_gate", route_after_escalate)
     workflow.add_edge("generate", "final_check")
-    workflow.add_edge("final_check", END)
+
+    # Badcase 收集节点（后置 Hook，零侵入主流程）
+    def badcase_collect(state: AgentState) -> AgentState:
+        import os
+        if os.environ.get("BADCASE_ENABLED", "true").lower() == "true":
+            from observability.badcase import collector
+            collector.collect(state)
+        return {}  # 不修改任何 state
+
+    workflow.add_node("badcase_collect", badcase_collect)
+    workflow.add_edge("final_check", "badcase_collect")
+    workflow.add_edge("badcase_collect", END)
 
     # 持久化后端选择
     if CHECKPOINTER_TYPE == "redis":

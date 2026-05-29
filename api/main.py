@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from api.middleware import RequestIDMiddleware
-from api.routes import health, chat
+from api.routes import health, chat, badcases
 from ui.gradio_app import create_ui
 from observability.metrics import get_metrics, CONTENT_TYPE_LATEST
 from observability.logging import setup_logging
@@ -51,6 +51,7 @@ app.add_middleware(RateLimitMiddleware)
 # 路由
 app.include_router(health.router)
 app.include_router(chat.router)
+app.include_router(badcases.router)
 
 
 @app.get("/metrics")

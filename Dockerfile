@@ -1,7 +1,7 @@
 # 客服 Agent — 多阶段构建
 
 # ==================== 构建阶段 ====================
-FROM python:3.11-slim as builder
+FROM registry.cn-hangzhou.aliyuncs.com/library/python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -10,16 +10,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 
 # 先复制依赖文件，利用缓存层
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # 安装生产化额外依赖
 RUN pip install --no-cache-dir --user \
     fastapi uvicorn python-multipart \
     redis msgpack numpy \
-    prometheus-client structlog pyyaml
+    prometheus-client structlog pyyaml \
+    -i https://mirrors.aliyun.com/pypi/simple/
 
 # ==================== 运行阶段 ====================
-FROM python:3.11-slim as runtime
+FROM registry.cn-hangzhou.aliyuncs.com/library/python:3.11-slim AS runtime
 
 WORKDIR /app
 
