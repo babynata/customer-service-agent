@@ -16,6 +16,8 @@ from api.routes import health, chat
 from ui.gradio_app import create_ui
 from observability.metrics import get_metrics, CONTENT_TYPE_LATEST
 from observability.logging import setup_logging
+from middleware.rate_limit import RateLimitMiddleware
+from middleware.circuit_breaker import CircuitBreakerMiddleware
 
 
 @asynccontextmanager
@@ -34,7 +36,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 中间件
+# 中间件（顺序：越晚添加越靠近 handler）
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +45,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CircuitBreakerMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 # 路由
 app.include_router(health.router)
