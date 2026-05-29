@@ -70,7 +70,6 @@ class TestPolicyCheck:
 
         assert result["policy_result"]["eligible"] is False
         assert result["policy_result"]["reason"] == "金额超限"
-        assert result["policy_result"]["threshold"] == 5000
 
     def test_refund_no_order(self, base_state):
         state = {**base_state, "intent": "refund", "order_info": None}
@@ -127,7 +126,7 @@ class TestEscalateGate:
             **base_state,
             "confidence": 0.9,
             "sentiment": 0.0,
-            "policy_result": {"reason": "金额超限"},
+            "policy_result": {"eligible": False, "reason": "金额超限"},
             "order_info": {"amount": 8999},
         }
         result = escalate_gate(state)

@@ -1,0 +1,30 @@
+# 客服 Agent 政策规则配置
+# 修改此文件后无需重启服务，规则引擎会自动热更新
+
+rules:
+  - name: high_amount_refund
+    description: "大额退款需人工审核"
+    priority: 100
+    conditions:
+      - field: intent
+        operator: eq
+        value: refund
+      - field: order.amount
+        operator: gt
+        value: 5000
+    action:
+      eligible: false
+      reason: "金额超限"
+      escalate: true
+
+  - name: standard_refund
+    description: "标准退款自动处理"
+    priority: 50
+    conditions:
+      - field: intent
+        operator: eq
+        value: refund
+    action:
+      eligible: true
+      reason: "符合退款条件"
+      escalate: false

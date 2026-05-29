@@ -10,6 +10,7 @@ import re
 
 from state import AgentState
 from tools import query_order, query_faq
+from config.policy_engine import policy_engine
 
 
 def retrieve_node(state: AgentState) -> AgentState:
@@ -53,7 +54,8 @@ def retrieve_node(state: AgentState) -> AgentState:
 
 def policy_check(state: AgentState) -> AgentState:
     """
-    代码节点：政策判断（确定性规则引擎）
+    代码节点：政策判断（配置化规则引擎）
+    规则来源：config/policies.yaml，支持热更新
     """
     if state["intent"] != "refund":
         return {"thinking_log": []}
@@ -68,16 +70,27 @@ def policy_check(state: AgentState) -> AgentState:
     amount = order["amount"]
     logs.append(f"   订单金额: ¥{amount}")
 
-    # 硬性规则：金额 > 5000 需人工
-    if amount > 5000:
-        logs.append("   结果: 金额超限(>5000)，需人工审核")
+    # 使用配置化规则引擎评估
+    context = {
+        "intent": state["intent"],
+        "order": order,
+        "amount": amount,
+    }
+    action = policy_engine.evaluate(context)
+
+    if action is None:
+        logs.append("   结果: 无匹配规则，默认放行")
+        return {"policy_result": {"eligible": True, "reason": "无规则匹配"}, "thinking_log": logs}
+
+    if not action.eligible:
+        logs.append(f"   结果: {action.reason}，需人工审核")
         return {
-            "policy_result": {"eligible": False, "reason": "金额超限", "threshold": 5000},
+            "policy_result": {"eligible": False, "reason": action.reason},
             "thinking_log": logs
         }
 
-    logs.append("   结果: 符合自动退款条件")
-    return {"policy_result": {"eligible": True, "reason": "符合退款条件"}, "thinking_log": logs}
+    logs.append(f"   结果: {action.reason}")
+    return {"policy_result": {"eligible": True, "reason": action.reason}, "thinking_log": logs}
 
 
 def contract_check(state: AgentState) -> AgentState:
@@ -127,10 +140,11 @@ def escalate_gate(state: AgentState) -> AgentState:
         blocked = True
         reason = "用户情绪极度负面"
         logs.append("   触发: 情感负面")
-    elif (state.get("policy_result") or {}).get("reason") == "金额超限":
+    elif (state.get("policy_result") or {}).get("eligible") is False:
         blocked = True
-        reason = f"金额超限 ¥{state['order_info']['amount']}"
-        logs.append("   触发: 金额超限")
+        policy_reason = state["policy_result"]["reason"]
+        reason = f"{policy_reason} ¥{state['order_info']['amount']}"
+        logs.append(f"   触发: {policy_reason}")
     elif state.get("can_auto_resolve") is False:
         blocked = True
         reason = "推理节点建议人工处理"

@@ -7,7 +7,7 @@ LLM 语义层节点
 
 import json
 
-from config import llm_intent, llm_reason, llm_generate, MODEL_INFO
+from app_config import llm_intent, llm_reason, llm_generate, MODEL_INFO
 from schemas import IntentSchema, ReasonSchema, GenerateSchema
 from state import AgentState
 
