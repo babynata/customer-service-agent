@@ -8,6 +8,8 @@ Mock 数据工厂
 import random
 from datetime import datetime, timedelta
 
+from schemas.faq_schema import FAQDocument
+
 
 PRODUCTS = [
     ("iPhone 15 Pro", 8999),
@@ -149,22 +151,106 @@ def create_tracking_map(orders: dict[str, dict]) -> dict[str, list[dict]]:
     return tracking
 
 
-FAQ_ENTRIES = {
-    "退款": {"answer": "7天无理由退款，超过7天需联系人工客服", "confidence": 0.9},
-    "发票": {"answer": "可在订单详情页申请电子发票，1-3个工作日内发送到您的邮箱", "confidence": 0.85},
-    "改地址": {"answer": "订单未发货前可在订单详情页修改收货地址；已发货请联系人工客服", "confidence": 0.88},
-    "物流延误": {"answer": "如遇物流延误，我们会主动跟进并补偿相应运费", "confidence": 0.82},
-    "商品损坏": {"answer": "收到商品如有损坏，请拍照联系客服，我们会安排换货或退款", "confidence": 0.9},
-    "取消订单": {"answer": "未发货订单可随时取消；已发货订单需签收后申请退货", "confidence": 0.87},
-    "换货": {"answer": "支持15天无理由换货，请保持商品原包装完好", "confidence": 0.86},
-    "保修": {"answer": "Apple产品享受官方1年保修，可在任意Apple Store或授权维修点维修", "confidence": 0.92},
-    "优惠券": {"answer": "优惠券可在结算页选择使用，每张订单限用一张", "confidence": 0.8},
-    "会员": {"answer": "开通会员享受专属折扣、优先发货、专属客服等权益", "confidence": 0.83},
-    "分期": {"answer": "支持3/6/12期免息分期，下单时选择花呗分期或信用卡分期即可", "confidence": 0.85},
-    "赠品": {"answer": "活动期间下单指定商品可获赠对应礼品，赠品与主商品分开发货", "confidence": 0.78},
-}
+FAQ_ENTRIES: list[FAQDocument] = [
+    FAQDocument(
+        id="faq_refund_001",
+        question="如何申请退款？",
+        synonyms=["退款", "退货", "退钱", "钱退回来"],
+        answer="7天无理由退款，超过7天需联系人工客服",
+        category="售后",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_invoice_001",
+        question="如何申请发票？",
+        synonyms=["发票", "开票", "电子发票", "增值税发票"],
+        answer="可在订单详情页申请电子发票，1-3个工作日内发送到您的邮箱",
+        category="支付",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_address_001",
+        question="如何修改收货地址？",
+        synonyms=["改地址", "修改地址", "换地址", "地址填错了"],
+        answer="订单未发货前可在订单详情页修改收货地址；已发货请联系人工客服",
+        category="物流",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_delay_001",
+        question="物流延误怎么办？",
+        synonyms=["物流延误", "迟迟不到", "快递慢", "迟迟没收到"],
+        answer="如遇物流延误，我们会主动跟进并补偿相应运费",
+        category="物流",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_damage_001",
+        question="收到商品损坏怎么办？",
+        synonyms=["商品损坏", "东西坏了", "收到破损", "碎了"],
+        answer="收到商品如有损坏，请拍照联系客服，我们会安排换货或退款",
+        category="售后",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_cancel_001",
+        question="如何取消订单？",
+        synonyms=["取消订单", "不要了", "撤销订单", "不想要了"],
+        answer="未发货订单可随时取消；已发货订单需签收后申请退货",
+        category="售后",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_exchange_001",
+        question="如何换货？",
+        synonyms=["换货", "换一个", "换颜色", "换尺寸"],
+        answer="支持15天无理由换货，请保持商品原包装完好",
+        category="售后",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_warranty_001",
+        question="保修政策是什么？",
+        synonyms=["保修", "维修", "质保", "保修期"],
+        answer="Apple产品享受官方1年保修，可在任意Apple Store或授权维修点维修",
+        category="售后",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_coupon_001",
+        question="如何使用优惠券？",
+        synonyms=["优惠券", "折扣券", "代金券", "满减"],
+        answer="优惠券可在结算页选择使用，每张订单限用一张",
+        category="支付",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_member_001",
+        question="会员有什么权益？",
+        synonyms=["会员", "VIP", "会员权益", "开通会员"],
+        answer="开通会员享受专属折扣、优先发货、专属客服等权益",
+        category="支付",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_installment_001",
+        question="支持分期付款吗？",
+        synonyms=["分期", "分期付款", "免息分期", "花呗"],
+        answer="支持3/6/12期免息分期，下单时选择花呗分期或信用卡分期即可",
+        category="支付",
+        confidence_threshold=0.72,
+    ),
+    FAQDocument(
+        id="faq_gift_001",
+        question="如何获取赠品？",
+        synonyms=["赠品", "送什么", "有礼品吗", "附赠"],
+        answer="活动期间下单指定商品可获赠对应礼品，赠品与主商品分开发货",
+        category="支付",
+        confidence_threshold=0.72,
+    ),
+]
 
 
-def create_faq() -> dict[str, dict]:
-    """生成 FAQ 数据"""
-    return FAQ_ENTRIES.copy()
+def create_faq() -> dict[str, FAQDocument]:
+    """生成 FAQ 数据，以 id 为 key 的字典"""
+    return {doc.id: doc for doc in FAQ_ENTRIES}

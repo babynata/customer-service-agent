@@ -8,7 +8,7 @@ P0 方案：调用火山方舟 Embedding API，FAQ 数据量小，直接用 nump
 import os
 import asyncio
 import numpy as np
-from typing import Optional
+from typing import Any, Optional
 
 # 使用 langchain_openai 的 OpenAIEmbeddings 兼容调用方舟接口
 # 方舟 Embedding API 与 OpenAI /v1/embeddings 兼容
@@ -77,21 +77,21 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / (norm_a * norm_b))
 
 
-def search_faq(query_vec: list[float], faq_vectors: list[tuple[str, list[float]]], top_k: int = 3) -> list[dict]:
+def search_faq(query_vec: list[float], faq_vectors: list[tuple[Any, list[float]]], top_k: int = 3) -> list[dict]:
     """
     在 FAQ 向量库中搜索最相似的条目
 
     Args:
         query_vec: 查询向量
-        faq_vectors: [(faq_key, vector), ...]
+        faq_vectors: [(doc, vector), ...]，doc 为任意对象（如 FAQDocument 实例）
         top_k: 返回前 K 条
 
     Returns:
-        [{"key": str, "score": float}, ...]
+        [{"doc": Any, "score": float}, ...]
     """
     scored = []
-    for key, vec in faq_vectors:
+    for doc, vec in faq_vectors:
         score = cosine_similarity(query_vec, vec)
-        scored.append({"key": key, "score": round(score, 4)})
+        scored.append({"doc": doc, "score": round(score, 4)})
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[:top_k]

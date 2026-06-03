@@ -64,6 +64,8 @@ curl -X POST http://localhost:8000/chat \
 - **限流熔断** —— IP 限流 10 QPS、会话限流 30 轮/小时、错误率>20% 或连续 10 次失败触发熔断，冷却 30 秒
 - **Prometheus 监控** —— 暴露 `/metrics` 端点，覆盖请求数、延迟直方图、LLM 调用次数、错误数、FAQ 命中率
 - **FAQ 向量检索** —— 基于 Embedding 语义搜索 + 余弦相似度，附带关键词兜底，支持常见咨询类问题自动回答
+- **FAQ 短路路径** —— FAQ 高置信度命中时跳过 LLM 推理和生成，直接返回标准答案，延迟降至 ~50ms；退款意图仍先过政策校验再判断短路
+- **FAQ 混合打分** —— 三级加分：向量余弦相似度 + 关键词 bonus（标准问题 +0.15 / 同义词 +0.08）+ 分类上下文 bonus（+0.05），支持条目级阈值配置
 
 ## Quick Start
 
@@ -181,6 +183,8 @@ curl "http://localhost:8000/badcases?trigger=blocked"
   → 意图识别 (intent_node, llm_fast, IntentSchema)
   → 路由决策 (router.py, 代码硬路由)
     ├─→ 自动处理路径：retrieve → policy_check → reason → generate → final_check
+    ├─→ FAQ 短路路径：retrieve → faq_direct → final_check（高置信度 FAQ 命中）
+    ├─→ 退款+FAQ 短路：retrieve → policy_check → faq_direct → final_check（政策通过 + FAQ 命中）
     └─→ 升级路径：escalate_gate → escalate
   → 输出回复 + thinking_log
   → Badcase 收集 (后置 Hook，不修改 state)
@@ -192,6 +196,7 @@ curl "http://localhost:8000/badcases?trigger=blocked"
 |------|------|------|
 | `intent_understand` | LLM | 识别用户意图、置信度、情感 |
 | `retrieve` | 代码 | 并行查询订单 + FAQ 向量检索 |
+| `faq_direct` | 代码 | FAQ 高置信度命中时直接返回标准答案，跳过 LLM |
 | `policy_check` | 代码 | YAML 策略规则校验 |
 | `reason` | LLM | 推理分析、制定处理计划 |
 | `contract_check` | 代码 | 汇总契约违规项 |
@@ -204,6 +209,7 @@ curl "http://localhost:8000/badcases?trigger=blocked"
 
 - `confidence >= 0.7`：自动处理
 - `confidence < 0.7`：进入升级网关
+- FAQ 短路阈值：`faq_result.answer.confidence >= 0.8`
 
 ## Project Structure
 
@@ -233,7 +239,8 @@ demo-agent/
 │   └── badcase.py
 ├── schemas/                # Pydantic 接口契约
 │   ├── llm_output.py
-│   └── tool_input.py
+│   ├── tool_input.py
+│   └── faq_schema.py       # FAQDocument 结构化契约
 ├── state/                  # 状态定义与持久化
 │   ├── agent_state.py
 │   └── redis_saver.py
@@ -258,21 +265,26 @@ demo-agent/
 ARK_API_KEY="sk-test-fake-key-for-pytest" pytest tests/ -v
 ```
 
-共 48 个测试，覆盖范围：
+共 62 个测试，覆盖范围：
 
 | 文件 | 数量 | 说明 |
 |------|------|------|
-| `test_code_nodes.py` | 18 | 检索、政策检查、契约校验、升级、最终校验 |
+| `test_code_nodes.py` | 24 | 检索、政策检查、契约校验、升级、最终校验、FAQ 短路、同义词匹配 |
 | `test_llm_nodes.py` | 14 | Mock LLM 调用验证 Schema 处理逻辑 |
-| `test_graph.py` | 5 | 完整图路径（happy path / blocked path / 多轮记忆） |
-| `test_policy_engine.py` | - | YAML 策略规则解析与执行 |
+| `test_graph.py` | 9 | 完整图路径（happy path / blocked path / 多轮记忆 / FAQ 短路） |
+| `test_faq_schema.py` | 6 | FAQDocument Schema 校验 |
+| `test_policy_engine.py` | 8 | YAML 策略规则解析与执行 |
 
 真实 API Key **永不进入**测试流程。
 
 ## Roadmap
 
+- [x] FAQ RAG 闭环（检索 → 生成 → 短路路径）
+- [x] FAQ 数据模型升级（同义词、分类、条目级阈值）
 - [ ] 接入内部订单 API，替换 `tools/mock_data.py`
-- [ ] 接入物流 API 与 RAG 向量数据库，替换 `tools/query.py`
+- [ ] 接入物流 API，替换 `tools/query.py`
+- [ ] 接入 Milvus 向量数据库，支持万级 FAQ
+- [ ] FAQ 同义词自动挖掘（LLM 生成 + 人工审核）
 - [ ] 接入规则引擎（Drools 或内部系统），替换 `nodes/code_nodes.py:policy_check`
 - [ ] Redis 持久化 + 分布式锁，替换内存状态
 - [ ] 配置中心（Nacos / Apollo / Consul），替换 `app_config.py` 硬编码
@@ -283,7 +295,7 @@ ARK_API_KEY="sk-test-fake-key-for-pytest" pytest tests/ -v
 
 - **Mock 数据**：当前使用内存 Mock 数据演示链路，生产环境需替换为真实 API
 - **LLM 提供商**：当前仅对接火山方舟（Volcengine Ark），切换其他提供商需修改 `app_config.py`
-- **FAQ 检索**：向量检索为本地简化实现（numpy + cosine similarity），生产环境建议迁移至专用向量数据库
+- **FAQ 检索**：当前为内存向量检索（numpy + 混合打分），同义词和分类数据为手动填充，生产环境建议迁移至 Milvus + 自动同义词挖掘
 - **语言场景**：当前主要优化中文客服场景，多语言支持需额外 prompt 工程
 
 ## Troubleshooting

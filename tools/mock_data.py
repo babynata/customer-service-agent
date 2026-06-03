@@ -5,6 +5,7 @@ Mock 数据源
 通过工厂函数生成丰富的测试数据，同时保留原始硬编码订单以保证测试兼容。
 """
 
+from schemas.faq_schema import FAQDocument
 from tools.mock_factory import create_orders, create_tracking_map, create_faq
 
 # 工厂生成 20 个订单，覆盖各种金额和状态
@@ -45,9 +46,23 @@ _LEGACY_TRACKING = {
 MOCK_ORDERS: dict[str, dict] = {**_FACTORY_ORDERS, **_LEGACY_ORDERS}
 MOCK_TRACKING: dict[str, list[dict]] = {**_FACTORY_TRACKING, **_LEGACY_TRACKING}
 
-# FAQ：合并原始条目与工厂生成的完整条目
+# FAQ：合并工厂数据与额外条目
 _BASE_FAQ = {
-    "退款": {"answer": "7天无理由退款，超过7天需联系人工客服", "confidence": 0.9},
-    "发票": {"answer": "可在订单详情页申请电子发票", "confidence": 0.85},
+    "faq_refund_001": FAQDocument(
+        id="faq_refund_001",
+        question="如何申请退款？",
+        synonyms=["退款", "退货", "退钱", "钱退回来"],
+        answer="7天无理由退款，超过7天需联系人工客服",
+        category="售后",
+        confidence_threshold=0.72,
+    ),
+    "faq_invoice_001": FAQDocument(
+        id="faq_invoice_001",
+        question="如何申请发票？",
+        synonyms=["发票", "开票", "电子发票", "增值税发票"],
+        answer="可在订单详情页申请电子发票",
+        category="支付",
+        confidence_threshold=0.72,
+    ),
 }
-MOCK_FAQ: dict[str, dict] = {**_FACTORY_FAQ, **_BASE_FAQ}
+MOCK_FAQ: dict[str, FAQDocument] = {**_FACTORY_FAQ, **_BASE_FAQ}
