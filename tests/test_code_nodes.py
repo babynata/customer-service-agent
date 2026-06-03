@@ -9,7 +9,7 @@ from unittest.mock import patch, AsyncMock
 
 from nodes.code_nodes import (
     retrieve_node, policy_check, contract_check,
-    escalate_gate, final_check
+    escalate_gate, faq_direct_node, final_check
 )
 
 
@@ -38,6 +38,15 @@ class TestRetrieveNode:
 
         assert result["faq_result"]["matched"] is True
         assert "退款" in result["faq_result"]["answer"]["answer"]
+
+    def test_retrieve_faq_synonym_match(self, base_state):
+        """同义词匹配：用户说'退货'应命中退款 FAQ"""
+        state = {**base_state, "entities": {}, "user_query": "我要退货"}
+        result = retrieve_node(state)
+
+        assert result["faq_result"]["matched"] is True
+        assert "退款" in result["faq_result"]["answer"]["answer"]
+        assert "退货" in result["faq_result"]["answer"]["matched_keyword"]
 
     def test_retrieve_faq_no_match(self, base_state):
         state = {**base_state, "entities": {}, "user_query": "完全无关的问题"}
@@ -203,3 +212,49 @@ class TestFinalCheck:
         result = final_check(state)
 
         assert "校验通过" in "\n".join(result["thinking_log"])
+
+
+class TestFaqDirectNode:
+    """FAQ 直接回复节点测试"""
+
+    def test_faq_direct_returns_answer(self, base_state):
+        """FAQ 命中时直接返回标准答案"""
+        state = {
+            **base_state,
+            "faq_result": {
+                "matched": True,
+                "answer": {"answer": "7天无理由退款", "confidence": 0.92, "matched_keyword": "退款"},
+                "sources": [],
+            }
+        }
+        result = faq_direct_node(state)
+
+        assert result["response"] == "7天无理由退款"
+        assert result["policy_cited"] is False
+        assert any("FAQ 直接回复" in line for line in result["thinking_log"])
+        assert any("0.920" in line for line in result["thinking_log"])
+
+    def test_faq_direct_no_answer(self, base_state):
+        """FAQ answer 为 None 时的边界处理"""
+        state = {**base_state, "faq_result": {"matched": False, "answer": None, "sources": []}}
+        result = faq_direct_node(state)
+
+        # 节点本身不判断 matched，路由负责判断；answer 为 None 时返回空串
+        assert result["response"] == ""
+        assert result["policy_cited"] is False
+
+    def test_faq_direct_messages_populated(self, base_state):
+        """FAQ 直接回复写入 messages"""
+        state = {
+            **base_state,
+            "faq_result": {
+                "matched": True,
+                "answer": {"answer": "支持3/6/12期免息分期", "confidence": 0.85, "matched_keyword": "分期"},
+                "sources": [],
+            }
+        }
+        result = faq_direct_node(state)
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["role"] == "assistant"
+        assert "分期" in result["messages"][0]["content"]

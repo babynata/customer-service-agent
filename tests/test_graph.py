@@ -58,7 +58,7 @@ class TestHappyPath:
         assert result["order_info"] is not None
 
     def test_small_refund_auto_resolved(self, compiled_graph):
-        """小额退款自动处理"""
+        """小额退款自动处理（不触发 FAQ 短路的完整路径）"""
         mock_intent = MagicMock()
         mock_intent.intent = "refund"
         mock_intent.confidence = 0.88
@@ -84,9 +84,10 @@ class TestHappyPath:
             mg.invoke.return_value = mock_generate
 
             config = {"configurable": {"thread_id": "test_refund"}}
+            # 使用不含 FAQ 关键词的查询，确保走完整 reason→generate 路径
             result = compiled_graph.invoke({
-                "user_query": "我要退款",
-                "messages": [{"role": "user", "content": "我要退款"}],
+                "user_query": "我想退这个订单",
+                "messages": [{"role": "user", "content": "我想退这个订单"}],
             }, config)
 
         assert result["intent"] == "refund"
@@ -230,3 +231,103 @@ class TestMultiTurn:
         assert "已发货" in second_intent_prompt
 
         assert result_2["order_info"] is not None  # checkpoint 保留了订单信息
+
+
+class TestFaqDirectPath:
+    """FAQ 短路路径集成测试"""
+
+    def test_faq_high_confidence_shortcut(self, compiled_graph):
+        """FAQ 高置信度命中走短路路径，跳过 LLM 推理和生成"""
+        mock_intent = MagicMock()
+        mock_intent.intent = "shipping"
+        mock_intent.confidence = 0.92
+        mock_intent.sentiment = 0.3
+        mock_intent.entities = {}
+
+        with patch("nodes.llm_nodes.llm_intent") as mi:
+            mi.invoke.return_value = mock_intent
+            config = {"configurable": {"thread_id": "test_faq_shortcut"}}
+            result = compiled_graph.invoke({
+                "user_query": "怎么退款",
+                "messages": [{"role": "user", "content": "怎么退款"}],
+            }, config)
+
+        # FAQ 命中且 confidence ≥ 0.8 时，应走 faq_direct 路径
+        assert "退款" in result["response"]
+        assert any("FAQ 直接回复" in line for line in result["thinking_log"])
+
+    def test_faq_low_confidence_goes_to_reason(self, compiled_graph):
+        """FAQ 未命中时仍走 LLM 链路"""
+        mock_intent = MagicMock()
+        mock_intent.intent = "shipping"
+        mock_intent.confidence = 0.92
+        mock_intent.sentiment = 0.3
+        mock_intent.entities = {"order_id": "123456789012345678"}
+
+        mock_reason = MagicMock()
+        mock_reason.analysis = "查询物流"
+        mock_reason.can_auto_resolve = True
+        mock_reason.plan = "查询物流"
+        mock_reason.escalate_reason = None
+
+        mock_generate = MagicMock()
+        mock_generate.response = "已发货"
+        mock_generate.policy_cited = False
+        mock_generate.confidence = 0.9
+
+        with patch("nodes.llm_nodes.llm_intent") as mi, \
+             patch("nodes.llm_nodes.llm_reason") as mr, \
+             patch("nodes.llm_nodes.llm_generate") as mg:
+            mi.invoke.return_value = mock_intent
+            mr.invoke.return_value = mock_reason
+            mg.invoke.return_value = mock_generate
+
+            config = {"configurable": {"thread_id": "test_faq_low"}}
+            result = compiled_graph.invoke({
+                "user_query": "我的订单到哪了",
+                "messages": [{"role": "user", "content": "我的订单到哪了"}],
+            }, config)
+
+        # 应走 reason → generate 路径
+        assert "FAQ 直接回复" not in "\n".join(result["thinking_log"])
+
+    def test_faq_direct_still_goes_through_final_check(self, compiled_graph):
+        """FAQ 短路路径仍经过 final_check 安全校验"""
+        mock_intent = MagicMock()
+        mock_intent.intent = "shipping"
+        mock_intent.confidence = 0.92
+        mock_intent.sentiment = 0.3
+        mock_intent.entities = {}
+
+        with patch("nodes.llm_nodes.llm_intent") as mi:
+            mi.invoke.return_value = mock_intent
+            config = {"configurable": {"thread_id": "test_faq_final_check"}}
+            result = compiled_graph.invoke({
+                "user_query": "怎么退款",
+                "messages": [{"role": "user", "content": "怎么退款"}],
+            }, config)
+
+        # final_check 应该执行并留下日志
+        assert any("最终校验" in line for line in result["thinking_log"])
+
+    def test_refund_with_faq_hit_goes_through_policy_then_shortcut(self, compiled_graph):
+        """退款+FAQ 命中：先过政策校验，政策通过后走 FAQ 短路"""
+        mock_intent = MagicMock()
+        mock_intent.intent = "refund"
+        mock_intent.confidence = 0.88
+        mock_intent.sentiment = -0.1
+        mock_intent.entities = {"order_id": "876543210987654321"}
+
+        with patch("nodes.llm_nodes.llm_intent") as mi:
+            mi.invoke.return_value = mock_intent
+            config = {"configurable": {"thread_id": "test_refund_faq_shortcut"}}
+            result = compiled_graph.invoke({
+                "user_query": "我要退款",
+                "messages": [{"role": "user", "content": "我要退款"}],
+            }, config)
+
+        # 退款意图先走 policy_check，政策通过后 FAQ 命中走短路
+        assert result["intent"] == "refund"
+        assert result["policy_result"]["eligible"] is True
+        assert result["blocked"] is False
+        assert any("FAQ 直接回复" in line for line in result["thinking_log"])

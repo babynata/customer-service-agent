@@ -21,19 +21,34 @@ def route_after_intent(state: AgentState) -> Literal["retrieve", "escalate_gate"
     return "escalate_gate"
 
 
-def route_after_retrieve(state: AgentState) -> Literal["policy_check", "reason"]:
+def route_after_retrieve(state: AgentState) -> Literal["policy_check", "reason", "faq_direct"]:
     """
     检索后的路由：
-    - 退款意图 → 先过政策校验
+    - 退款意图 → 必须先过政策校验（即使 FAQ 命中，退款资格以政策为准）
+    - FAQ 高置信度命中 → 直接返回标准答案（跳过 LLM）
     - 其他 → 直接推理
     """
     if state["intent"] == "refund":
         return "policy_check"
+    faq = state.get("faq_result") or {}
+    if faq.get("matched") and (faq.get("answer") or {}).get("confidence", 0) >= 0.8:
+        return "faq_direct"
     return "reason"
 
 
-def route_after_policy(state: AgentState) -> Literal["reason"]:
-    """政策校验后必须走推理节点"""
+def route_after_policy(state: AgentState) -> Literal["reason", "faq_direct"]:
+    """
+    政策校验后的路由：
+    - 政策拒绝（ineligible） → 走推理节点（后续升级转人工）
+    - 政策通过 + FAQ 命中 → FAQ 短路（标准答案 + 政策已验证）
+    - 其他 → 走推理节点
+    """
+    policy = state.get("policy_result") or {}
+    if policy.get("eligible") is not False:
+        # 政策通过或无规则匹配时，检查 FAQ 短路
+        faq = state.get("faq_result") or {}
+        if faq.get("matched") and (faq.get("answer") or {}).get("confidence", 0) >= 0.8:
+            return "faq_direct"
     return "reason"
 
 

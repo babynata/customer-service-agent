@@ -144,6 +144,8 @@ def reason_node(state: AgentState) -> AgentState:
 
     order = state.get("order_info")
     policy = state.get("policy_result")
+    faq = state.get("faq_result")
+    faq_answer = faq.get("answer") if faq and faq.get("matched") else None
 
     history = state.get("messages", [])
     history_text = ""
@@ -164,6 +166,7 @@ def reason_node(state: AgentState) -> AgentState:
     - 用户意图：{state['intent']}
     - 订单信息：{json.dumps(order, ensure_ascii=False) if order else '无'}
     - 政策判断：{json.dumps(policy, ensure_ascii=False) if policy else '无'}
+    - FAQ 检索结果：{json.dumps(faq_answer, ensure_ascii=False) if faq_answer else '无'}
     - 用户情感：{state['sentiment']}
 
     决策规则（严格遵循）：
@@ -172,6 +175,7 @@ def reason_node(state: AgentState) -> AgentState:
     3. 意图=refund，policy.eligible=true → can_auto_resolve=true
     4. 意图=refund，policy.eligible=false → can_auto_resolve=false
     5. 订单为空 或 情感<-0.8 → can_auto_resolve=false
+    6. FAQ 命中且 confidence ≥ 0.72 → can_auto_resolve=true（标准答案可用）
 
     输出契约：必须包含 analysis, can_auto_resolve(bool), plan, escalate_reason
     """
@@ -235,6 +239,8 @@ def generate_node(state: AgentState) -> AgentState:
     policy = state.get("policy_result")
     reasoning = state.get("reasoning", "")
     variant = state.get("variant") or "A"
+    faq = state.get("faq_result")
+    faq_answer = faq.get("answer") if faq and faq.get("matched") else None
 
     history = state.get("messages", [])
     history_text = ""
@@ -275,6 +281,9 @@ def generate_node(state: AgentState) -> AgentState:
     决策结论（不可违背）：{reasoning}
     订单信息：{json.dumps(order, ensure_ascii=False) if order else '无'}
     政策结果：{json.dumps(policy, ensure_ascii=False) if policy else '无'}
+    FAQ 检索结果：{json.dumps(faq_answer, ensure_ascii=False) if faq_answer else '无'}
+
+    【重要】若 FAQ 检索命中，回复必须基于 FAQ 中的标准答案，不得自由发挥。保持答案准确性。
 
     当前策略版本：{variant}
     {tone_rules}

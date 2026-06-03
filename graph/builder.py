@@ -14,7 +14,7 @@ from state.redis_saver import RedisSaver
 from nodes import (
     intent_understand, reason_node, generate_node,
     retrieve_node, policy_check, contract_check,
-    escalate_gate, final_check,
+    escalate_gate, faq_direct_node, final_check,
 )
 from graph.router import (
     route_after_intent, route_after_retrieve, route_after_policy,
@@ -45,6 +45,7 @@ def build_agent_graph():
     workflow.add_node("policy_check", policy_check)
     workflow.add_node("contract_check", contract_check)
     workflow.add_node("escalate_gate", escalate_gate)
+    workflow.add_node("faq_direct", faq_direct_node)
     workflow.add_node("final_check", final_check)
 
     # 边
@@ -55,6 +56,7 @@ def build_agent_graph():
     workflow.add_conditional_edges("reason", route_after_reason)
     workflow.add_conditional_edges("contract_check", route_after_contract)
     workflow.add_conditional_edges("escalate_gate", route_after_escalate)
+    workflow.add_edge("faq_direct", "final_check")
     workflow.add_edge("generate", "final_check")
 
     # Badcase 收集节点（后置 Hook，零侵入主流程）

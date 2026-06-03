@@ -25,7 +25,7 @@ def retrieve_node(state: AgentState) -> AgentState:
     async def query_all():
         tasks = {
             "order": query_order(order_id),
-            "faq": query_faq(query)
+            "faq": query_faq(query, last_intent=state.get("intent")),
         }
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         return dict(zip(tasks.keys(), results))
@@ -156,6 +156,30 @@ def escalate_gate(state: AgentState) -> AgentState:
         "blocked": blocked,
         "block_reason": reason,
         "thinking_log": logs
+    }
+
+
+def faq_direct_node(state: AgentState) -> AgentState:
+    """
+    代码节点：FAQ 高置信度命中时直接返回标准答案
+    跳过 LLM 推理和生成，降低延迟和成本。
+    路由层（router.py）负责判断是否进入此节点。
+    """
+    faq = state.get("faq_result", {})
+    answer = faq.get("answer") or {}
+    response = answer.get("answer", "")
+
+    return {
+        "response": response,
+        "messages": [{"role": "assistant", "content": response}],
+        "policy_cited": False,
+        "blocked": False,
+        "thinking_log": [
+            "📚 【FAQ 直接回复】",
+            f"   命中关键词: {answer.get('matched_keyword', 'N/A')}",
+            f"   置信度: {answer.get('confidence', 0):.3f}",
+            "   跳过 LLM 生成，直接返回标准答案",
+        ]
     }
 
 
